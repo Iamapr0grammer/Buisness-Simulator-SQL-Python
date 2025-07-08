@@ -1,0 +1,1 @@
+## List of all the communications to the player, in their preffered language
