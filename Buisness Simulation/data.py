@@ -75,7 +75,11 @@ def create_new_database():
         salary INTEGER,
         vacation_days INTEGER,
         loyalty INTEGER,
-        job_start TIME
+        job_start TIME,
+        last_vacation TIME,
+        age INTEGER,
+        prior_expirience INTEGER,
+        number of reprimands INTEGER
     )
     ''')
 
@@ -178,6 +182,27 @@ def add_candidates(list):
             # Name          Surname         Date          Age         Salary       Expirience
 
         conn.commit()# commit code to the SQL file
+
+
+def hire_employee(cid):
+    cursor.execute("SELECT * FROM candidates WHERE id = ?", (cid,)) # move the candidated from the candidates database to the staff database
+    candidate = cursor.fetchone()
+
+    cursor.execute("""
+        INSERT INTO staff (name, surname, job_start, salary, age, prior_expirience) 
+        VALUES (?, ?, ?, ?, ?, ?);
+        """, (candidate[0], candidate[1], str(today), candidate[3], candidate[2], candidate[4]))
+            # Name          Surname         Date          Age         Salary       Expirience
+
+    conn.commit()# commit code to the SQL file
+
+
+    print("WTF : ", candidate)   # or do something productive with it
+
+
+def delete_candidate(cid): # delete the candidate from the candidates database
+    pass
+
 
 
 # before the game start, create database, and remove the old one

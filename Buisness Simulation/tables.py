@@ -8,7 +8,7 @@ import data, generator
 
 
 ## co dalej?
-# Podłączenie tego do Database
+# Podłączenie nowych kandydatów do Database, od teraz zatrudnienie kandydata oznacza pojawienie się go w database w tabelce "staff"
 
 # job posting:
 job_post_active = False
@@ -165,12 +165,6 @@ def create_hire_window():
 
     tree.pack(fill=tk.BOTH, expand=True)
 
-    def add_candidate(cand):
-        print(cand)
-        # text_salary = f"{cand[4]} PLN"
-        # hire_window.tree.insert("", tk.END, iid=cand["id"],
-        #             values=(cand["name"], cand["qual"], text_salary))
-
     # ── Action buttons (Hire / Reject) ───────────────────────────────────
     btn_frame = tk.Frame(hire_window, bg="#2d2d2d")
     btn_frame.pack(pady=10)
@@ -181,9 +175,10 @@ def create_hire_window():
             messagebox.showwarning("No Selection", "Select a candidate first.")
             return
         cid = int(selected[0])
-        hired_ids.add(cid)
+        hired_ids.add(cid) #???
+        hire_employee(cid)
+        delete_candidate(cid)
         tree.delete(cid)
-        messagebox.showinfo("Hired!", f"Candidate {cid} joins the payroll.\nYour problem now.")
 
     def reject_selected():
         selected = tree.selection()
@@ -192,7 +187,7 @@ def create_hire_window():
             return
         cid = int(selected[0])
         tree.delete(cid)
-        messagebox.showinfo("Rejected", f"Candidate {cid} escorted off the premises.")
+        delete_candidate(cid)
 
     hire_btn   = tk.Button(btn_frame, text="Hire",   width=12, bg="#008f39", fg="white",
                            command=hire_selected)
@@ -209,6 +204,11 @@ def create_hire_window():
     hire_window.protocol("WM_DELETE_WINDOW", hire_window_close)
 
 
+def hire_employee(cid): # move the candidated from the candidates database to the staff database
+    data.hire_employee(cid)
+
+def delete_candidate(cid): # delete the candidate from the candidates database
+    data.delete_candidate(cid)
 
 def create_job_offer_window():
     global job_offer
@@ -351,7 +351,7 @@ def update_candidates():
         # adapt to your real tuple / dict shape:
 
         print(cand)
-        full_name = str(cand[1] + cand[2])
+        full_name = str(cand[1] + " " + cand[2])
         id = cand[0]
 
         tree.insert("", tk.END, iid=id,
@@ -393,14 +393,6 @@ def test():
 # ON READY: Everything below happens the moment program starts:
 
 # table variables:
-
-
-# Dummy candidate list (normally from SQL)
-candidates_data = [
-    {"name": "Jan Kowalski", "age": 28, "experience": "2 years"},
-    {"name": "Anna Nowak", "age": 35, "experience": "5 years"},
-    {"name": "Piotr Zieliński", "age": 22, "experience": "Intern"},
-]
 
 #create_main_window
 
