@@ -8,17 +8,17 @@ import data, generator
 
 
 ## co dalej?
-# Podłączenie nowych kandydatów do Database, od teraz zatrudnienie kandydata oznacza pojawienie się go w database w tabelce "staff"
+# Podłączenie tranzakcji, by tabelka tranzakcji pokazywała historię konta bankowego. Dodatkowo podłączyć bazę danych tranzakcji
 
 # job posting:
 job_post_active = False
 salary_offer = 0
 
 # sample data:
-currest_staff = 50 # the amount of staff currently working
-hiring_status = "Now Hiring"
+currest_staff = 0 # the amount of staff currently working
+hiring_status = "Not Hiring"
 expected_money_change = data.next_month_change()
-money = 1000000
+money = 1000000 # starting money
 
 # === CHART FUNCTIONS ===
 
@@ -93,41 +93,96 @@ def create_expenses_chart():
     expenses_chart.protocol("WM_DELETE_WINDOW", expenses_chart_close)
 
 
-def create_staff_chart():
-    global staff_chart
-    print("create Staff Chart")
 
-    staff_chart = tk.Toplevel()
-    staff_chart.title("Staff Chart")
-    staff_chart.geometry("400x400+350+500")
-    staff_chart.config(bg="#2d2d2d")
 
-    # Sample Data
-    statuses = ['Working', 'On Vacation', 'Training', 'Sick']
-    counts = [5, 2, 1, 1]
 
-    fig, ax = plt.subplots(figsize=(4, 3), dpi=100)
-    bars = ax.bar(statuses, counts, color='skyblue')
-    ax.set_title("Staff Status", color="white")
-    ax.set_ylabel("Number of Staff", color="white")
-    ax.set_facecolor("#2d2d2d")
-    fig.patch.set_facecolor('#2d2d2d')
-    ax.tick_params(colors='white')
 
-    canvas = FigureCanvasTkAgg(fig, master=staff_chart)
-    canvas.draw()
-    canvas.get_tk_widget().pack()
+
+
+def create_staff_window():
+    global staff_window, staff_tree
+
+    staff_window = tk.Toplevel()
+    staff_window.title("Staff Controll Window")
+    staff_window.geometry("600x400+350+510")
+    staff_window.config(bg="#2d2d2d")
+
+    # ── Treeview + scrollbar frame ───────────────────────────────────────
+    frame = tk.Frame(staff_window, bg="#2d2d2d")
+    frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+
+    scrollbar = tk.Scrollbar(frame)
+    scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+
+
+    columns = ("name", "salary", "Vdays", "Jstart", "Reprimands")
+    staff_tree = ttk.Treeview(
+        frame, columns=columns, show="headings",
+        yscrollcommand=scrollbar.set, selectmode="browse"
+    )
+    scrollbar.config(command=staff_tree.yview)
+
+    # Headings
+    staff_tree.heading("name",   text="Name")
+    staff_tree.heading("salary", text="Salary")
+    staff_tree.heading("Vdays", text="Vacation Days")
+    staff_tree.heading("Jstart", text="Job Start")
+    staff_tree.heading("Reprimands", text="Reprimands")
+
+    # Column widths / alignment
+    staff_tree.column("name",   width=50)
+    staff_tree.column("salary",   width=50)
+    staff_tree.column("Vdays",   width=50)
+    staff_tree.column("Jstart",   width=50)
+    staff_tree.column("Reprimands",   width=50)
+
+    # tree.column("exp",   width=220)
+    # tree.column("salary", width=120, anchor="center")
+
+    staff_tree.pack(fill=tk.BOTH, expand=True)
+
+    # ── Action buttons (Hire / Reject) ───────────────────────────────────
+    btn_frame = tk.Frame(staff_window, bg="#2d2d2d")
+    btn_frame.pack(pady=10)
+
+    def hire_selected():
+        selected = staff_tree.selection()
+        if not selected:
+            messagebox.showwarning("No Selection", "Select a candidate first.")
+            return
+        cid = int(selected[0])
+        hire_employee(cid)
+        delete_candidate(cid)
+        staff_tree.delete(cid)
+
+    def reject_selected():
+        selected = staff_tree.selection()
+        if not selected:
+            messagebox.showwarning("No Selection", "Select a candidate first.")
+            return
+        cid = int(selected[0])
+        staff_tree.delete(cid)
+        delete_candidate(cid)
+
+    hire_btn   = tk.Button(btn_frame, text="Hire",   width=12, bg="#008f39", fg="white",
+                           command=hire_selected)
+    reject_btn = tk.Button(btn_frame, text="Reject", width=12, bg="#cc0000", fg="white",
+                           command=reject_selected)
+    hire_btn.grid(row=0, column=0, padx=10)
+    reject_btn.grid(row=0, column=1, padx=10)
 
     # overrite close button
-    def staff_chart_close():
-        staff_chart.withdraw()
+    def staff_window_close():
+        staff_window.withdraw()
 
     # override the close button to kill the app
-    staff_chart.protocol("WM_DELETE_WINDOW", staff_chart_close)
+    staff_window.protocol("WM_DELETE_WINDOW", staff_window_close)
 
 
 
-hired_ids = set()   # store hired candidate IDs, replace that later
+
+
 
 
 # ── Window factory ────────────────────────────────────────────────────────
@@ -136,7 +191,7 @@ def create_hire_window():
 
     hire_window = tk.Toplevel()
     hire_window.title("Candidate List")
-    hire_window.geometry("600x400+780+510")
+    hire_window.geometry("600x400+970+510")
     hire_window.config(bg="#2d2d2d")
 
     # ── Treeview + scrollbar frame ───────────────────────────────────────
@@ -146,7 +201,9 @@ def create_hire_window():
     scrollbar = tk.Scrollbar(frame)
     scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
 
-    columns = ("name", "exp", "salary")
+
+
+    columns = ("name", "exp", "age", "salary")
     tree = ttk.Treeview(
         frame, columns=columns, show="headings",
         yscrollcommand=scrollbar.set, selectmode="browse"
@@ -156,14 +213,17 @@ def create_hire_window():
     # Headings
     tree.heading("name",   text="Name")
     tree.heading("exp",   text="Expirience")
+    tree.heading("age",   text="Age")
     tree.heading("salary", text="Expected Salary")
 
     # Column widths / alignment
     tree.column("name",   width=180)
-    tree.column("exp",   width=220)
+    tree.column("exp",   width=80)
+    tree.column("age",   width=80)
     tree.column("salary", width=120, anchor="center")
 
     tree.pack(fill=tk.BOTH, expand=True)
+
 
     # ── Action buttons (Hire / Reject) ───────────────────────────────────
     btn_frame = tk.Frame(hire_window, bg="#2d2d2d")
@@ -175,18 +235,15 @@ def create_hire_window():
             messagebox.showwarning("No Selection", "Select a candidate first.")
             return
         cid = int(selected[0])
-        hired_ids.add(cid) #???
         hire_employee(cid)
         delete_candidate(cid)
-        tree.delete(cid)
-
+    
     def reject_selected():
         selected = tree.selection()
         if not selected:
             messagebox.showwarning("No Selection", "Select a candidate first.")
             return
         cid = int(selected[0])
-        tree.delete(cid)
         delete_candidate(cid)
 
     hire_btn   = tk.Button(btn_frame, text="Hire",   width=12, bg="#008f39", fg="white",
@@ -205,7 +262,8 @@ def create_hire_window():
 
 
 def hire_employee(cid): # move the candidated from the candidates database to the staff database
-    data.hire_employee(cid)
+    data.hire_employee(cid) # add the candidate to the staff database and delete the candidate form the candidate database
+    update_all()
 
 def delete_candidate(cid): # delete the candidate from the candidates database
     data.delete_candidate(cid)
@@ -237,12 +295,15 @@ def create_job_offer_window():
 
     # Post button
     def post_offer():
-        global job_post_active, salary_offer
+        global job_post_active, salary_offer, root
         chosen = selected_salary.get()
         job_post_active = True
         stop_hire_window_btn.place(x=10, y=260)
 
         salary_offer = int(chosen)
+
+        # update hiring status
+        staff_hire_display.config(text="Hiring", fg="green")
 
         print(f"Posted job offer with salary: {chosen}")
         # You can store this choice somewhere or trigger actual logic here
@@ -258,11 +319,9 @@ def create_job_offer_window():
     job_offer.protocol("WM_DELETE_WINDOW", job_offer_close)
 
 
-
 def update_display():
     global root, money
     expected_money_change = data.next_month_change()
-    money = money + expected_money_change
     money_label.config(text=f"Your Budget: {money}")
     expected_money_change_label.config(text=f"Estimated turnover: {expected_money_change}")
 
@@ -275,6 +334,12 @@ def update_display():
     # update the date
     today_label.config(text=f"Today: {data.today}")
 
+
+
+def update_money(): # update the money that the player currently have
+    global money
+    expected_money_change = data.next_month_change()
+    money = money + expected_money_change
 
 
 
@@ -290,7 +355,7 @@ def show_expenses_chart():
     
 
 def show_staff_chart():
-    staff_chart.deiconify()
+    staff_window.deiconify()
 
 
 # show window functions
@@ -299,7 +364,7 @@ def show_hire_window():
     job_offer.deiconify()
 
 def show_candidates_window():
-    hire_window.deiconify()
+    staff_window.deiconify()
 
 def show_candidates_button():
     pass
@@ -314,24 +379,28 @@ def hide_all():
 # === MAIN WINDOW ===
 
 def next_month():
-    update_all_charts()
-    update_display()
-    print(data.next_day())
 
-    # generate all events
+    # generate all events, before UI is updated
     if job_post_active:
         candidates = generator.chance_for_new_candidate(salary_offer) # generates new candidates and places them inside the database
         data.add_candidates(candidates)
-        print(candidates)
+
+    data.next_month()
+    update_money()
+    update_all()
+
 
 
 def stop_hiring():
-    global job_post_active
+    global job_post_active, root
     #candidates_btn.place(x=100, y=260)
     stop_hire_window_btn.place_forget()
 
     # job posting:
     job_post_active = False
+
+    # update hiring status
+    staff_hire_display.config(text="Not Hiring", fg="red")
 
 def update_candidates():
     """Pull new candidates from DB (or dummy list) and refresh the tree."""
@@ -350,30 +419,39 @@ def update_candidates():
     for cand in candidates:
         # adapt to your real tuple / dict shape:
 
-        print(cand)
         full_name = str(cand[1] + " " + cand[2])
         id = cand[0]
 
         tree.insert("", tk.END, iid=id,
-                    values=(full_name, f"{cand[6]} Years", f"{cand[4]} PLN"))
+                    values=(full_name, f"{cand[6]} Years", cand[5] ,f"{cand[4]} PLN"))
 
 
-    # job_candidates = data.get_candidates()
-    # for i in job_candidates:
-    #     print(i)
-    
-    # # ── Populate rows in candidate table ────────────────────────────────────────────────────
-    # for cand in job_candidates:
-    #     create_hire_window.hire_selected()
+def update_all():
+    update_candidates() # add candidates from the database
+    update_staff()
+    update_display()
 
-def update_all_charts():
-    update_candidates()
-    # if staff_chart in active_charts:
-    #     staff_chart.destroy()
-    # if expenses_chart in active_charts:
-    #     expenses_chart.destroy()
-    # if money_chart in active_charts:
-    #     money_chart.destroy()
+
+def update_staff():
+    # 1) fetch all staff ------------------------------------------------
+    staff = data.get_staff()   # expects list of tuples / dicts
+
+    # 2) clear current table -------------------------------------------
+    staff_tree.delete(*staff_tree.get_children())
+
+    # 3) insert rows ----------------------------------------------------
+    for employee in staff:
+        # adapt to your real tuple / dict shape:
+
+        employee_id = employee[0]
+        employee_full_name = str(employee[1] + " " + employee[2])
+        employee_salary = employee[3]
+        employee_vacation_days = employee[4]
+        employee_job_start = employee[6]
+        employee_reprimands = employee[10]
+
+        staff_tree.insert("", tk.END, iid=employee_id,
+                    values=(employee_full_name, f"{employee_salary} PLN", employee_vacation_days, employee_job_start, employee_reprimands))
 
 
 # message box
@@ -433,7 +511,7 @@ staff_display = tk.Label(root, text=f"Your Current Staff: {currest_staff}", font
 staff_display.place(x=20, y=y_coord) # controll the location
 y_coord += 40
 
-staff_hire_display = tk.Label(root, text=f"{hiring_status}", font=("Helvetica", 16, "bold"), fg="green", bg="#2d2d2d")
+staff_hire_display = tk.Label(root, text=f"{hiring_status}", font=("Helvetica", 16, "bold"), fg="red", bg="#2d2d2d")
 staff_hire_display.place(x=20, y=y_coord) # controll the location
 y_coord += 40
 
@@ -477,7 +555,7 @@ y_coord += 40
 # create all sub-chart windows
 create_expenses_chart()
 create_money_chart()
-create_staff_chart()
+create_staff_window()
 create_hire_window()
 create_job_offer_window()
 

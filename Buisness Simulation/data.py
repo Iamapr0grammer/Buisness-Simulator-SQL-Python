@@ -1,5 +1,6 @@
 import sqlite3, os, datetime
 from datetime import date
+from dateutil.relativedelta import relativedelta
 
 ## Python program that communicates with datbase, placed all SQL stuff here to keep the program transparency
 
@@ -20,9 +21,9 @@ current_money = 1000000  # my current money, starting at 1 milion
 # what tables do I need?
 # cash over time, monthly regular expenses, staff chart
 
-def next_day():
+def next_month():
     global today
-    today = today + datetime.timedelta(days=1) # move 1 day forward
+    today = today + relativedelta(months=1)   # precise calendar jump
     return today
 
 
@@ -79,7 +80,7 @@ def create_new_database():
         last_vacation TIME,
         age INTEGER,
         prior_expirience INTEGER,
-        number of reprimands INTEGER
+        number_of_reprimands INTEGER
     )
     ''')
 
@@ -153,23 +154,31 @@ def create_new_database():
     return conn, cursor
 
 
-def hire_employee():
-    pass
-
 def next_month_change():
     cursor.execute("SELECT SUM(amount) FROM expenses") # get the amount of summed expenses and add it together
     expenses = cursor.fetchone()
+
+    cursor.execute("SELECT SUM(salary) FROM staff") # get the amount of summed expenses and add it together
+    all_employee_salary = cursor.fetchone()
 
     gains = 0 # temporary it will be 0, later, revenue will be added
 
     results = gains - expenses[0]
 
+    if all_employee_salary[0] != None: # only if there are employees, then substract their salary
+        results -= all_employee_salary[0]
+
     return results
 
 def get_candidates():
-    cursor.execute("SELECT * FROM candidates") # get the amount of summed expenses and add it together
+    cursor.execute("SELECT * FROM candidates")
     candidates = cursor.fetchall()
     return candidates
+
+def get_staff():
+    cursor.execute("SELECT * FROM staff") # get all the staff
+    staff = cursor.fetchall()
+    return staff
 
 def add_candidates(list):
     global cursor, conn # export cursor and connection outside the function for later use
@@ -188,20 +197,26 @@ def hire_employee(cid):
     cursor.execute("SELECT * FROM candidates WHERE id = ?", (cid,)) # move the candidated from the candidates database to the staff database
     candidate = cursor.fetchone()
 
+    candidate_name = candidate[1]
+    candidate_surname = candidate[2]
+    candidate_salary = candidate[4]
+    candidate_age = candidate[5]
+    candidate_exp = candidate[6]
+
     cursor.execute("""
-        INSERT INTO staff (name, surname, job_start, salary, age, prior_expirience) 
-        VALUES (?, ?, ?, ?, ?, ?);
-        """, (candidate[0], candidate[1], str(today), candidate[3], candidate[2], candidate[4]))
-            # Name          Surname         Date          Age         Salary       Expirience
+        INSERT INTO staff (name, surname, job_start, salary, age, prior_expirience, vacation_days, number_of_reprimands) 
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?);
+        """, (candidate_name, candidate_surname, today, candidate_salary, candidate_age, candidate_exp, 0, 0))
+            # Name              Surname       starting date    Salary         Age       prior expirience, vacation_days, number_of_reprimands
 
     conn.commit()# commit code to the SQL file
 
+    delete_candidate(cid)
 
-    print("WTF : ", candidate)   # or do something productive with it
-
-
+    
 def delete_candidate(cid): # delete the candidate from the candidates database
-    pass
+    cursor.execute("DELETE FROM candidates WHERE id = ?", (cid,)) 
+    conn.commit()
 
 
 
