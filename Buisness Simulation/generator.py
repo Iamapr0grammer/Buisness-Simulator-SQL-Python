@@ -1,5 +1,6 @@
 import random, data
-
+from datetime import date
+from dateutil.relativedelta import relativedelta
 
 
 
@@ -107,6 +108,24 @@ def generate_person():
     person = [name, family_name, dish, age, sex]
 
     return person
+
+
+
+def generate_random_expanses(day):
+    change_for_random_expanse = 0
+
+    starting_day = day
+
+    for i in range(30):
+        starting_day = starting_day + relativedelta(day=1)
+
+        change_for_random_expanse += random.randint(1,5)
+
+        if change_for_random_expanse > 20:
+            money_change = random.randint(-10000, 10000)
+            reason = "Casino Trip"
+            data.money_change(money_change, reason, day)
+            change_for_random_expanse = 0 # reset the chance
 
 
 def chance_for_new_candidate(salary):
