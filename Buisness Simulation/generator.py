@@ -3,6 +3,10 @@ from datetime import date
 from dateutil.relativedelta import relativedelta
 
 
+# DATA
+
+restaurant_reputation = 10
+
 
 # list of male names
 male_names = [
@@ -124,9 +128,70 @@ def generate_random_expanses(day):
         if change_for_random_expanse > 20:
             money_change = random.randint(-10000, 10000)
             reason = "Casino Trip"
-            data.money_change(money_change, reason, day)
+            data.money_change(money_change, reason, day, "Casino")
             change_for_random_expanse = 0 # reset the chance
 
+
+
+def full_month_clients():
+    global restaurant_reputation
+
+    print(restaurant_reputation)
+
+    gained_money = 0 # for now it will be 100, later I will create a reputation system, that can be damaged or reapaired
+    staff = data.get_staff()
+
+    working_staff = []
+    staff_power = 3 # you as the owner can also serve the customers, this 3 represents the owner
+
+    for employee in staff:
+        if employee[11] == "working": # if working status "working"
+            working_staff.append(employee)  
+            staff_power += 2 + (employee[9] // 3) # 5 basic + 0.3 for each year of expirience
+
+    # do it for 30 days, avarage month, later i can possibly create a function that will use specific numbers coresponding to the day in each specific month
+    for i in range(30):
+        results = simulate_single_day(staff_power, restaurant_reputation)
+        gained_money += results[0]
+        restaurant_reputation += results[1]
+
+    return gained_money
+
+
+def simulate_single_day(staff_power, restaurant_reputation):
+    results = [0,0] # money and reputation 
+
+    # get a chance for how many clients might show-up
+    max_clients = restaurant_reputation // 50
+    min_clients = restaurant_reputation // 100
+
+    if min_clients < 1:
+        min_clients = random.randint(0,1) # there is still a small chance that someone hungry will show-up
+    
+    if max_clients < 1:
+        max_clients = 1
+
+    clients = random.randint(min_clients, max_clients)
+    customer_traffic = 0
+
+    for i in range(clients):
+        dish_worth = random.randint(5,100)
+        customer_traffic += 1
+
+        if customer_traffic > staff_power:
+            results[1] = unhappy_client(results[1])
+        else:
+            results[1] = happy_client(results[1])
+            results[0] += dish_worth
+
+    return results
+
+
+def happy_client(reputation):
+    return reputation + 1 # happy restaurant review
+
+def unhappy_client(reputation):
+    return reputation - 1 # unhappy restaurant review
 
 def chance_for_new_candidate(salary):
 

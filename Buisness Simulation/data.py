@@ -80,35 +80,10 @@ def create_new_database():
         last_vacation TIME,
         age INTEGER,
         prior_expirience INTEGER,
-        number_of_reprimands INTEGER
+        number_of_reprimands INTEGER,
+        status TEXT NOT NULL 
     )
     ''')
-
-    conn.commit()# commit code to the SQL file
-
-    # Creating expenses table, with list of all regular monthly expenses
-    cursor.execute('''
-    CREATE TABLE IF NOT EXISTS expenses (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT NOT NULL,
-        amount INTEGER
-    )''')
-
-    conn.commit()# commit code to the SQL file
-
-    # Add all expenses
-
-    # rent
-    cursor.execute("""
-    INSERT INTO expenses (name, amount) 
-    VALUES (?, ?);
-    """, ("rent", 7000))
-
-    # maintenance
-    cursor.execute("""
-    INSERT INTO expenses (name, amount) 
-    VALUES (?, ?);
-    """, ("maintenance", 500))
 
     conn.commit()# commit code to the SQL file
 
@@ -131,23 +106,62 @@ def create_new_database():
     # Creating transaction table, with list of all transactions and the current budget
     cursor.execute('''
     CREATE TABLE IF NOT EXISTS transactions (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        date DATE,
-        transaction_name TEXT NOT NULL,
-        amount INTEGER,
-        action TEXT NOT NULL,
-        budget_after INTEGER
+        id INTEGER PRIMARY KEY AUTOINCREMENT,     -- ID of the transaction
+        date DATE,                                -- Date of when that transaction happened
+        transaction_name TEXT NOT NULL,           -- Name of the transaction, for later grouping when displaying charts
+        amount INTEGER,                           -- how much money was added or removed
+        action TEXT NOT NULL,                     -- if the money was removed, or added (I could just use a minus number to determine thas as well)
+        budget_after INTEGER,                     -- Money in the bank after the transaction happened, in other words... current money
+        notes TEXT NOT NULL                      -- Notes, like for example, what employee has this salary, reason for this fine, etc.
     )''')
 
     conn.commit()# commit code to the SQL file
     
+
+    
     # add the fist transaction, of the player winning a lottery
     cursor.execute("""
-    INSERT INTO transactions (date, transaction_name, amount, action, budget_after) 
-    VALUES (?, ?, ?, ?, ?);
-    """, (str(today), "Lottery Win", current_money, "added", current_money))
+    INSERT INTO transactions (date, transaction_name, amount, action, budget_after, notes) 
+    VALUES (?, ?, ?, ?, ?, ?);
+    """, (str(today), "Lottery Win", current_money, "added", current_money, "You have won some money! Great!"))
 
     conn.commit()# commit code to the SQL file
+
+
+
+
+    # Creating expenses table, with list of all regular expenses, that happen every month
+    cursor.execute('''
+    CREATE TABLE IF NOT EXISTS expenses (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,     -- ID of the expense
+        expense TEXT NOT NULL,                    -- name of the expense of when that transaction happened
+        amount INTEGER,                           -- how much money will be removed with this expense
+        notes TEXT NOT NULL,                      -- Notes, like for example, what employee has this salary, reason for this fine, etc.
+        left INTEGER                              -- If this expense will happen only couple of times, then set a number here. Place negative number for this to happen forever
+    )''')
+
+    conn.commit()# commit code to the SQL file
+
+
+    
+    # Add all expenses
+
+    # rent
+    cursor.execute("""
+    INSERT INTO expenses (expense, amount, notes, left) 
+    VALUES (?, ?, ?, ?);
+    """, ("Rent", 7000, "Property rent by the end of the month", -1))
+
+    conn.commit()# commit code to the SQL file
+
+    # maintenance
+    cursor.execute("""
+    INSERT INTO expenses (expense, amount, notes, left) 
+    VALUES (?, ?, ?, ?);
+    """, ("maintenance", 500, "Property rent by the end of the month", -1))
+
+    conn.commit()# commit code to the SQL file
+
 
     print("----")
 
@@ -204,14 +218,16 @@ def hire_employee(cid):
     candidate_exp = candidate[6]
 
     cursor.execute("""
-        INSERT INTO staff (name, surname, job_start, salary, age, prior_expirience, vacation_days, number_of_reprimands) 
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?);
-        """, (candidate_name, candidate_surname, today, candidate_salary, candidate_age, candidate_exp, 0, 0))
+        INSERT INTO staff (name, surname, job_start, salary, age, prior_expirience, vacation_days, number_of_reprimands, status) 
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
+        """, (candidate_name, candidate_surname, today, candidate_salary, candidate_age, candidate_exp, 0, 0, "working"))
             # Name              Surname       starting date    Salary         Age       prior expirience, vacation_days, number_of_reprimands
 
     conn.commit()# commit code to the SQL file
 
     delete_candidate(cid)
+
+    return candidate
 
     
 def delete_candidate(cid): # delete the candidate from the candidates database
@@ -223,7 +239,7 @@ def get_money():
     money = cursor.fetchone()
     return money[5] # return the last part of the tuble, that is the budget after
 
-def money_change(money, reason, day):
+def money_change(money, reason, day, notes):
     current_money = get_money()
     new_money = current_money + money
     action = "added"
@@ -231,9 +247,9 @@ def money_change(money, reason, day):
         action = "removed"
 
     cursor.execute("""
-        INSERT INTO transactions (date, transaction_name, amount, action, budget_after) 
-        VALUES (?, ?, ?, ?, ?);
-        """, (day, reason, money, action, new_money))
+        INSERT INTO transactions (date, transaction_name, amount, action, budget_after, notes) 
+        VALUES (?, ?, ?, ?, ?, ?);
+        """, (day, reason, money, action, new_money, notes))
 
     conn.commit()# commit code to the SQL file
 
@@ -275,6 +291,63 @@ def get_monthly_money_chart():
 
 
 
+
+
+
+
+def get_monthly_expenses():
+
+    # cursor.execute("""
+    #     SELECT t.transaction_name, SUM(t.amount) AS total_amount
+    #     FROM   transactions t
+    #     WHERE  t.action = 'removed'
+    #     AND  strftime('%Y-%m', t.date) = (
+    #             SELECT strftime('%Y-%m', MAX(date))
+    #             FROM   transactions
+    #         )
+    #     GROUP BY t.transaction_name
+    #     ORDER BY total_amount DESC;
+    # """)
+
+
+    cursor.execute("""
+        SELECT * FROM expenses;
+    """)
+
+    raw_results = cursor.fetchall()
+
+    processed_results = [ [] , [] ]
+
+    for res in raw_results:
+        name = res[1]
+        money = int(res[2])
+
+        new_expense = True
+
+        if len(processed_results[0]) > 0:
+            count = 0
+            for i in processed_results[0]:
+                if i == name:
+                    processed_results[1][count] += money
+                    new_expense = False
+                count += 1
+        
+        if new_expense:
+            processed_results[0].append(name)
+            processed_results[1].append(money)
+
+
+    return processed_results # return the two lists one with the names and the other with the money
+
+
+# here is where we will add a regular expenses, month over month, like employee salaries
+def add_monthly_expense(name, cost, notes, time):
+    cursor.execute("""
+    INSERT INTO expenses (expense, amount, notes, left) 
+    VALUES (?, ?, ?, ?);
+    """, (name, cost, notes, time))
+
+    conn.commit()# commit code to the SQL file
 
 
 
