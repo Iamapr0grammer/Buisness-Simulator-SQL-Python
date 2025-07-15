@@ -274,6 +274,37 @@ def get_monthly_money_chart():
     return results
 
 
+def get_monthly_expenses():
+
+    cursor.execute("""
+        SELECT t.transaction_name, SUM(t.amount) AS total_amount
+        FROM   transactions t
+        WHERE  t.action = 'removed'
+        AND  strftime('%Y-%m', t.date) = (
+                SELECT strftime('%Y-%m', MAX(date))
+                FROM   transactions
+            )
+        GROUP BY t.transaction_name
+        ORDER BY total_amount DESC;
+    """)
+
+    raw_results = cursor.fetchall()
+
+    processed_results = [ [] , [] ]
+
+    for res in raw_results:
+        processed_results[0].append(res[0])
+        money = res[1]
+
+        if money < 0: # make sure that they are positive
+            money = -money
+        processed_results[1].append(money)
+
+
+    return processed_results # return the two lists one with the names and the other with the money
+
+
+
 
 
 

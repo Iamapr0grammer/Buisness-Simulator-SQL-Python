@@ -8,19 +8,28 @@ import data, generator
 
 
 ## co dalej?
-# Podłączenie tranzakcji, by tabelka tranzakcji pokazywała historię konta bankowego. Dodatkowo podłączyć bazę danych tranzakcji
+# Nadanie funkcjonalności grafowi wydatków, ten wykres kołowy, by przedstawiał faktycznie ilość wydatków.
 
 # GLOBAL VARIABLES
-money_chart  = None   # the Toplevel window
-money_canvas = None   # FigureCanvasTkAgg
-money_ax     = None   # matplotlib Axes
+money_chart   = None
+money_canvas  = None
+money_ax      = None
+money_history = []      # ← keeps *all* months
+POINT_PIXELS  = 100      # ≈ pixels per point on the x‑axis
+MIN_POINTS    = 3
+DPI = 100         # we created the figure with dpi=100
+
+expenses_chart  = None      # Toplevel window
+expenses_canvas = None      # FigureCanvasTkAgg
+expenses_ax     = None      # matplotlib Axes
+expenses_fig    = None     # shared figure
 
 
 # job posting:
 job_post_active = False
 salary_offer = 0
 
-# sample data:
+# data:
 currest_staff = 0 # the amount of staff currently working
 hiring_status = "Not Hiring"
 expected_money_change = data.next_month_change()
@@ -28,96 +37,124 @@ money = 1000000 # starting money
 
 # === CHART FUNCTIONS ===
 
-def update_money_chart():
-    global money_chart, money_ax
-
-    # 1) grab latest data ------------------------------------------------
-    money_comearison = data.get_monthly_money_chart() # gives a list of money over time
-    
-    days  = []
-    money = []
-
-    for month in money_comearison:
-        days.append(month[0])
-        money.append(month[1])
-    
-    print("========================================================")
-    print(money_comearison)
-
-    # 2) clear & redraw --------------------------------------------------
-    money_ax.clear()
-    money_ax.set_facecolor("#2d2d2d")
-    money_ax.set_title("Cash Over Time", color="white")
-    money_ax.set_xlabel("Day",          color="white")
-    money_ax.set_ylabel("PLN",          color="white")
-    money_ax.tick_params(colors='white')
-
-    money_ax.plot(days, money, color="lime", marker='o')
-
-    # 3) push changes to the Tk canvas ----------------------------------
-    money_canvas.draw()
 
 def create_money_chart():
-    """Build the window & chart once. Call update_money_chart() for refresh."""
-    global money_chart, money_canvas, money_ax
+    """Build the window & chart once; it auto‑resizes."""
+    global money_chart, money_canvas, money_ax, fig
 
-    # ── Window ─────────────────────────────────────────────────────────
     money_chart = tk.Toplevel()
     money_chart.title("Money Chart")
-    money_chart.geometry("400x400+350+50")
+    money_chart.geometry("500x400+350+50")
     money_chart.config(bg="#2d2d2d")
-    money_chart.protocol("WM_DELETE_WINDOW", money_chart.withdraw)  # hide on X
-
-    # ── Figure / Axis ─────────────────────────────────────────────────
-    fig, money_ax = plt.subplots(figsize=(4, 3), dpi=100)
-    fig.patch.set_facecolor('#2d2d2d')
+    money_chart.protocol("WM_DELETE_WINDOW", money_chart.withdraw)
+    
+    # I did not found any way to re-size it after the creation, so I will just...
+    fig, money_ax = plt.subplots(figsize=(40, 20), dpi=100) # make the graphs so big, that the user will not see its ends
+    fig.patch.set_facecolor("#2d2d2d")
     money_ax.set_facecolor("#2d2d2d")
-    money_ax.set_title("Cash Over Time",  color="white")
-    money_ax.set_xlabel("Day",            color="white")
-    money_ax.set_ylabel("PLN",            color="white")
-    money_ax.tick_params(colors='white')
+    _style_money_ax()
 
-    # initial empty plot
-    money_ax.plot([], [])
-
-    # ── Embed in Tk ───────────────────────────────────────────────────
     money_canvas = FigureCanvasTkAgg(fig, master=money_chart)
     money_canvas.draw()
-    money_canvas.get_tk_widget().pack()
+    canvas_widget = money_canvas.get_tk_widget()
+    canvas_widget.pack(fill=tk.BOTH, expand=True) 
+    #canvas_widget.configure(background="#2d2d2d")
 
-    # overrite close button
-    def money_chart_close():
-        money_chart.withdraw()
+    # redraw every time user resizes the window
+    canvas_widget.bind("<Configure>", _on_money_resize)
 
-    # override the close button to kill the app
-    money_chart.protocol("WM_DELETE_WINDOW", money_chart_close)
+
+def update_money_chart():
+    """Fetch fresh data and store in the history, then redraw."""
+    global money_history
+
+    rows = data.get_monthly_money_chart()         # list of (date, balance)
+    money_history = rows                          # keep ALL months
+    _redraw_visible_points()                      # draw slice fitting the width
+
+
+# ──────────────────────────────────────────────────────────────
+# helpers
+# ──────────────────────────────────────────────────────────────
+
+def _style_money_ax():
+    """Common styling for the axis."""
+    money_ax.set_title("Cash Over Time", color="white")
+    money_ax.set_xlabel("Month",         color="white")
+    money_ax.set_ylabel("PLN",           color="white")
+    money_ax.tick_params(colors='white')
+
+
+def _visible_count_for_width(width_px: int) -> int:
+    """How many points can fit given window width (heuristic)."""
+    return max(MIN_POINTS, width_px // POINT_PIXELS)
+
+
+def _redraw_visible_points():
+    """Slice history to what fits and refresh matplotlib canvas."""
+    if not money_history:
+        return
+    
+    # How wide is the canvas *right now*?
+    width_px = money_canvas.get_tk_widget().winfo_width()
+    n_points = _visible_count_for_width(width_px)
+
+    # Slice last n_points
+    slice_ = money_history[-n_points:]
+    days   = [row[0] for row in slice_]
+    money  = [row[1] for row in slice_]
+
+    # draw
+    money_ax.clear()
+    money_ax.set_facecolor("#2d2d2d")
+    _style_money_ax()
+    money_ax.plot(days, money, color="lime", marker='o')
+    money_canvas.draw()
+
+
+def _on_money_resize(event):
+    """Stretch the matplotlib figure to exactly fill the Tk canvas widget."""
+    if event.width < 10 or event.height < 10:    # skip spurious tiny events
+        return
+
+    # inches = pixels / dpi
+    new_w = event.width  / fig.dpi
+    new_h = event.height / fig.dpi
+
+    fig.set_size_inches(new_w, new_h, forward=True)   # forward=True ⇢ redraw
+    fig.tight_layout()                                # use full area
+    money_canvas.draw_idle()                          # cheaper than draw()
+
+    _redraw_visible_points()
+
+
 
 
 def create_expenses_chart():
-    global expenses_chart
+    global expenses_chart, expenses_canvas, expenses_ax, expenses_fig
     print("create Expenses Chart")
 
     expenses_chart = tk.Toplevel()
     expenses_chart.title("Expenses Chart")
-    expenses_chart.geometry("400x400+780+50")
+    expenses_chart.geometry("400x300+860+50")
     expenses_chart.config(bg="#2d2d2d")
 
 
-    # Sample Data, just for creation, will be replaced instantly before the player has a chance to see it
+    # Sample Data, just for the creation, will be replaced instantly before the player has a chance to see it
     labels = ['Food', 'Salaries', 'Marketing', 'Maintenance']
     sizes = [300, 700, 150, 100]
 
-    fig, ax = plt.subplots(figsize=(4, 3), dpi=100)
-    wedges, texts, autotexts = ax.pie(
+    expenses_fig, expenses_ax = plt.subplots(figsize=(4, 3), dpi=100)
+    wedges, texts, autotexts = expenses_ax.pie(
         sizes, labels=labels, autopct='%1.1f%%', startangle=90, textprops={'color':"white"}
     )
-    ax.set_title("Expense Breakdown", color="white")
-    fig.patch.set_facecolor('#2d2d2d')
-    ax.set_facecolor("#2d2d2d")
+    expenses_ax.set_title("Last Months Expense Breakdown", color="white")
+    expenses_fig.patch.set_facecolor('#2d2d2d')
+    expenses_ax.set_facecolor("#2d2d2d")
 
-    canvas = FigureCanvasTkAgg(fig, master=expenses_chart)
-    canvas.draw()
-    canvas.get_tk_widget().pack()
+    expenses_canvas = FigureCanvasTkAgg(expenses_fig, master=expenses_chart)
+    expenses_canvas.draw()
+    expenses_canvas.get_tk_widget().pack()
 
     # overrite close button
     def expenses_chart_close():
@@ -219,7 +256,7 @@ def create_hire_window():
 
     hire_window = tk.Toplevel()
     hire_window.title("Candidate List")
-    hire_window.geometry("600x400+970+510")
+    hire_window.geometry("600x400+1040+510")
     hire_window.config(bg="#2d2d2d")
 
     # ── Treeview + scrollbar frame ───────────────────────────────────────
@@ -457,6 +494,36 @@ def update_candidates():
                     values=(full_name, f"{cand[6]} Years", cand[5] ,f"{cand[4]} PLN"))
 
 
+
+def update_expenses_chart(redraw=True):
+
+    exp_data = data.get_monthly_expenses()
+
+    labels = exp_data[0]
+    sizes = exp_data[1]
+
+    expenses_ax.clear()
+    expenses_ax.set_facecolor("#2d2d2d")
+    expenses_ax.set_title("Last Month's Expense Breakdown", color="white")
+
+    if sizes:
+        expenses_ax.pie(
+            sizes,
+            labels=labels,
+            autopct='%1.1f%%',
+            startangle=90,
+            textprops={'color': "white"}
+        )
+    else:
+        expenses_ax.text(0.5, 0.5, "No data", color="white",
+                         ha='center', va='center', size=14)
+
+    if redraw:
+        expenses_canvas.draw_idle()
+
+
+
+
 def update_all():
 
     generator.generate_random_expanses(data.today) # temporary for testing, delete later if necessary
@@ -464,8 +531,9 @@ def update_all():
     update_candidates() # add candidates from the database
     update_staff() # update the small window with the staff
     update_display() # the main root chart
+    update_expenses_chart()
     
-    update_money_chart() # update the chart with money over time
+    update_money_chart() # update the  visual chart with money over time
 
 
 def update_staff():
